@@ -1,0 +1,130 @@
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+    worker_connections 1024;
+    # multi_accept on;
+}
+
+http {
+    ##
+    # Basic Settings
+    ##
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    # server_tokens off;
+
+    # server_names_hash_bucket_size 64;
+    # server_name_in_redirect off;
+
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    ##
+    # SSL Settings
+    ##
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    ##
+    # Logging Settings
+    ##
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    ##
+    # Gzip Settings
+    ##
+    gzip on;
+    gzip_disable "msie6";
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    ##
+    # Cache Settings
+    ##
+    proxy_cache_path {{ nginx_cache_path }} levels=1:2 keys_zone=my_cache:{{ nginx_cache_size }} max_size={{ nginx_cache_size }} inactive={{ nginx_cache_inactive }};
+    proxy_cache_path /var/cache/nginx/vector_cache levels=1:2 keys_zone=vector_cache:10m max_size=10g inactive=60m use_temp_path=off;
+    proxy_cache_path /var/cache/nginx/osm_cache levels=1:2 keys_zone=osm_cache:10m max_size=10g inactive=60m use_temp_path=off;
+
+    ##
+    # Virtual Host Configs
+    ##
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
+
+    {% if enable_ssl %}
+    # HTTPS server
+    server {
+        listen 443 ssl;
+        server_name {{ ssl_domain }};
+
+        ssl_certificate /etc/letsencrypt/live/{{ ssl_domain }}/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/{{ ssl_domain }}/privkey.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        root /var/www/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /tegola/ {
+            proxy_pass http://localhost:8080/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Cache settings
+            proxy_cache my_cache;
+            proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
+            proxy_cache_valid 200 60m;
+            add_header X-Cache-Status $upstream_cache_status;
+        }
+    }
+
+    # HTTP server - redirect to HTTPS
+    server {
+        listen 80;
+        server_name {{ ssl_domain }};
+        return 301 https://$server_name$request_uri;
+    }
+    {% else %}
+    # HTTP server only
+    server {
+        listen 80;
+        server_name {{ ssl_domain }};
+
+        root /var/www/html;
+        index index.html;
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+
+        location /tegola/ {
+            proxy_pass http://localhost:8080/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # Cache settings
+            proxy_cache my_cache;
+            proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
+            proxy_cache_valid 200 60m;
+            add_header X-Cache-Status $upstream_cache_status;
+        }
+    }
+    {% endif %}
+} 

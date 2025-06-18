@@ -1,0 +1,35 @@
+---
+- name: Configure Mapping Infrastructure
+  hosts: geo_servers
+  become: yes
+  vars:
+    postgresql_version: "15"
+    postgis_version: "3"
+    tegola_version: "0.21.1"
+    nginx_cache_path: "/var/cache/nginx"
+    nginx_cache_size: "512m"
+    nginx_cache_inactive: "1d"
+    sync_cron_hour: "4"
+    sync_cron_minute: "0"
+    # SSL Configuration
+    ssl_domain: "geo.cloud-playgroud.space"
+    ssl_email: "admin@cloud-playgroud.space"
+    # if there is domain name set enable ssl to true, without domain name we cannot generate letsencrypt certificate
+    enable_ssl: false
+    # if ssl is enabled use HTTPS
+    geo_server_url: "<IP_address>/<domain>"
+    # Data Source Configuration
+    geofabric_url: "https://download.geofabrik.de/europe/bosnia-herzegovina-latest-free.shp.zip"
+    # Database Configuration
+    postgresql_password: "{{ lookup('env', 'POSTGRES_PASSWORD') }}"
+
+  roles:
+    - role: common
+    - role: postgresql
+    - role: postgis
+    - role: ogr2ogr
+    - role: sync_cron
+    - role: tegola
+    # uncomment in case enable_ssl is true, domain name is needed for certbot
+    #- role: certbot
+    - role: nginx

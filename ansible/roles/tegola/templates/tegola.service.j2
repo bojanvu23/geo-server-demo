@@ -1,0 +1,17 @@
+[Unit]
+Description=Tegola Vector Tile Server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=tegola
+Group=tegola
+WorkingDirectory=/var/lib/tegola
+ExecStart=/usr/local/bin/tegola serve --config /etc/tegola/config.toml
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/tegola/tegola.log
+StandardError=append:/var/log/tegola/tegola.error.log
+
+[Install]
+WantedBy=multi-user.target 

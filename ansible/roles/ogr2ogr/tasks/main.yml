@@ -1,0 +1,9 @@
+---
+# Install ogr2ogr command line tool for importing spatial data to PostgreSQL
+- name: Install GDAL and OGR utilities with additional drivers
+  apt:
+    name:
+      - gdal-bin
+      - python3-gdal
+    state: present
+    update_cache: yes 

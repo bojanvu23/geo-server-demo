@@ -1,0 +1,101 @@
+# Tegola Configuration
+
+[webserver]
+port = ":8080"
+hostname = "localhost"
+
+# Cache configuration
+[cache]
+type = "file"
+basepath = "/var/lib/tegola/cache"
+
+# Provider configuration
+[[providers]]
+name = "postgis"
+type = "postgis"
+host = "localhost"
+port = 5432
+database = "{{ postgresql_database | default('geo_db') }}"
+user = "{{ postgresql_user | default('geo_user') }}"
+password = "{{ postgresql_password }}"
+uri = "postgres://{{ postgresql_user | default('geo_user') }}:{{ postgresql_password }}@localhost:5432/{{ postgresql_database | default('geo_db') }}?sslmode=disable"
+srid = 3857
+max_connections = 50
+
+[[providers.layers]]
+name = "roads"
+tablename = "roads"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+
+[[providers.layers]]
+name = "buildings"
+tablename = "buildings"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+
+[[providers.layers]]
+name = "water"
+tablename = "water"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+
+[[providers.layers]]
+name = "landuse"
+tablename = "landuse"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+
+[[providers.layers]]
+name = "natural"
+tablename = "natural"
+geometry_fieldname = "way"
+id_fieldname = "osm_id"
+
+# Layer configuration
+[[maps]]
+name = "capabilities"
+attribution = "© OpenStreetMap contributors"
+bounds = [-180.0, -85.0511, 180.0, 85.0511]
+
+# Roads layer
+[[maps.layers]]
+provider_layer = "postgis.roads"
+min_zoom = 5
+max_zoom = 20
+sql = "SELECT ST_AsMVTGeom(way, !BBOX!) as geom, name, highway, ref FROM roads WHERE way && !BBOX!"
+
+# Buildings layer
+[[maps.layers]]
+provider_layer = "postgis.buildings"
+min_zoom = 12
+max_zoom = 20
+sql = "SELECT ST_AsMVTGeom(way, !BBOX!) as geom, name, building FROM buildings WHERE way && !BBOX!"
+
+# Water layer
+[[maps.layers]]
+provider_layer = "postgis.water"
+min_zoom = 5
+max_zoom = 20
+sql = "SELECT ST_AsMVTGeom(way, !BBOX!) as geom, name, water FROM water WHERE way && !BBOX!"
+
+# Landuse layer
+[[maps.layers]]
+provider_layer = "postgis.landuse"
+min_zoom = 5
+max_zoom = 20
+sql = "SELECT ST_AsMVTGeom(way, !BBOX!) as geom, name, landuse FROM landuse WHERE way && !BBOX!"
+
+# Natural layer
+[[maps.layers]]
+provider_layer = "postgis.natural"
+min_zoom = 5
+max_zoom = 20
+sql = "SELECT ST_AsMVTGeom(way, !BBOX!) as geom, name, natural FROM natural WHERE way && !BBOX!"
+
+# Add your layers here
+# Example:
+# [[maps.layers]]
+# provider_layer = "postgis.roads"
+# min_zoom = 10
+# max_zoom = 20 

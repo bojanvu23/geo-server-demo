@@ -1,0 +1,70 @@
+---
+- name: Import PostgreSQL repository key
+  apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+
+- name: Add PostgreSQL repository
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+    filename: pgdg
+
+- name: Install PostgreSQL
+  apt:
+    name: "postgresql-{{ postgresql_version }}"
+    state: present
+    update_cache: yes
+
+- name: Install psycopg2 for Python3
+  apt:
+    name: python3-psycopg2 
+    state: present
+    update_cache: yes
+
+- name: Ensure PostgreSQL is started and enabled
+  service:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Configure PostgreSQL to use password authentication
+  become: true
+  become_user: postgres
+  copy:
+    content: |
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+      local   all             postgres                                peer
+      local   all             all                                     md5
+      host    all             all             127.0.0.1/32            md5
+      host    all             all             ::1/128                 md5
+    dest: /etc/postgresql/{{ postgresql_version }}/main/pg_hba.conf
+    mode: '0640'
+  notify: restart postgresql
+
+- name: Create PostgreSQL database user
+  become: true
+  become_user: postgres
+  postgresql_user:
+    name: "{{ postgresql_user | default('geo_user') }}"
+    password: "{{ postgresql_password }}"
+    role_attr_flags: CREATEDB,LOGIN
+    state: present
+
+- name: Create PostgreSQL database
+  become: true
+  become_user: postgres
+  postgresql_db:
+    name: "{{ postgresql_database | default('geo_db') }}"
+    owner: "{{ postgresql_user | default('geo_user') }}"
+    state: present
+    encoding: UTF8
+    template: template0
+
+- name: Wait for PostgreSQL to be ready
+  wait_for:
+    host: localhost
+    port: 5432
+    delay: 5
+    timeout: 60
+  become: true 

@@ -1,0 +1,21 @@
+---
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install basic packages
+  apt:
+    name:
+      - curl
+      - wget
+      - git
+      - unzip
+      - build-essential
+      - python3-pip
+      - software-properties-common
+      - python3-certbot-nginx
+    state: present
+
+- name: Set timezone
+  timezone:
+    name: UTC

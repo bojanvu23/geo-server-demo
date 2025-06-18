@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Set environment variables
+export DB_NAME="{{ postgresql_database | default('geo_db') }}"
+export DB_USER="{{ postgresql_user | default('geo_user') }}"
+export DB_PASS="{{ postgresql_password }}"
+
+# Log function
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a /var/log/sync/sync_data.log
+}
+
+# Create temporary directory
+TEMP_DIR=$(mktemp -d)
+log "Created temporary directory: $TEMP_DIR"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+# Download data from Geofabric
+log "Downloading data from Geofabric {{ geofabric_url }}"
+curl -L "{{ geofabric_url }}" -o "$TEMP_DIR/data.zip" || {
+    log "Failed to download data"
+    exit 1
+}
+log "Download completed, unzipping..."
+
+# Debug information about the downloaded file
+log "Checking downloaded file..."
+ls -lh "$TEMP_DIR/data.zip" 2>&1 | tee -a /var/log/sync/sync_data.log
+file "$TEMP_DIR/data.zip" 2>&1 | tee -a /var/log/sync/sync_data.log
+
+# Try to unzip with verbose output
+log "Attempting to unzip data.zip"
+unzip "$TEMP_DIR/data.zip" -d "$TEMP_DIR" 2>&1 | tee -a /var/log/sync/sync_data.log
+UNZIP_EXIT_CODE=${PIPESTATUS[0]}
+if [ $UNZIP_EXIT_CODE -ne 0 ]; then
+    log "Failed to extract data. Unzip exit code: $UNZIP_EXIT_CODE"
+    log "Checking zip file integrity..."
+    unzip -t "$TEMP_DIR/data.zip" 2>&1 | tee -a /var/log/sync/sync_data.log
+    exit 1
+fi
+
+# Import data using ogr2ogr
+log "Importing data to PostgreSQL"
+for file in "$TEMP_DIR"/*.shp; do
+    if [ -f "$file" ]; then
+        table_name=$(basename "$file" .shp)
+        log "Importing $table_name from $file"
+        ogr2ogr -f "PostgreSQL" \
+                "PG:host=localhost dbname=$DB_NAME user=$DB_USER password=$DB_PASS" \
+                "$file" \
+                -nln "$table_name" \
+                -nlt MULTIPOLYGON  -where "OGR_GEOMETRY = 'POLYGON' OR OGR_GEOMETRY = 'MULTIPOLYGON'" \
+                -overwrite 2>&1 | tee -a /var/log/sync/sync_data.log
+    fi
+done
+
+# Cleanup
+log "Cleaning up temporary files"
+rm -rf "$TEMP_DIR"
+
+# Refresh materialized views if they exist
+log "Refreshing materialized views"
+PGPASSWORD="$DB_PASS" psql -h localhost -d "$DB_NAME" -U "$DB_USER" -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM pg_matviews WHERE matviewname = 'vector_tiles') THEN REFRESH MATERIALIZED VIEW CONCURRENTLY vector_tiles; END IF; END \$\$;" 2>&1 | tee -a /var/log/sync/sync_data.log
+
+log "Sync completed successfully" 

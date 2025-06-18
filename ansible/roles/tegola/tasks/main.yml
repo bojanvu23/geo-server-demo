@@ -1,0 +1,54 @@
+---
+- name: Create Tegola user
+  user:
+    name: tegola
+    system: yes
+    shell: /sbin/nologin
+    home: /var/lib/tegola
+    create_home: yes
+
+- name: Create Tegola directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: tegola
+    group: tegola
+    mode: '0755'
+  with_items:
+    - /var/lib/tegola
+    - /etc/tegola
+    - /var/log/tegola
+
+- name: Download Tegola
+  get_url:
+    url: "https://github.com/go-spatial/tegola/releases/download/v{{ tegola_version }}/tegola_linux_amd64.zip"
+    dest: /tmp/tegola.zip
+    mode: '0644'
+
+- name: Unzip Tegola
+  unarchive:
+    src: /tmp/tegola.zip
+    dest: /usr/local/bin
+    remote_src: yes
+    mode: '0755'
+
+- name: Create Tegola config
+  template:
+    src: config.toml.j2
+    dest: /etc/tegola/config.toml
+    mode: '0644'
+  notify: restart tegola
+
+- name: Create Tegola systemd service
+  template:
+    src: tegola.service.j2
+    dest: /etc/systemd/system/tegola.service
+    mode: '0644'
+  notify: restart tegola
+
+- name: Start and enable Tegola service
+  systemd:
+    name: tegola
+    state: started
+    enabled: yes
+    daemon_reload: yes 

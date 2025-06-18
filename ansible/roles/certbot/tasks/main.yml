@@ -1,0 +1,25 @@
+---
+- name: Install Certbot and Nginx plugin
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: yes
+
+- name: Create initial certificate
+  command: >
+    certbot certonly --standalone 
+    -d {{ ssl_domain }}
+    --non-interactive 
+    --agree-tos 
+    --email {{ ssl_email }}
+  when: enable_ssl
+  notify: restart nginx
+
+- name: Set up automatic renewal
+  copy:
+    content: "0 0 * * * root certbot renew --quiet"
+    dest: /etc/cron.d/certbot-renew
+    mode: '0644'
+  when: enable_ssl 

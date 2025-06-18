@@ -1,0 +1,46 @@
+---
+- name: Create sync script directory
+  file:
+    path: /usr/local/bin/sync
+    state: directory
+    mode: '0755'
+
+- name: Create sync log directory
+  file:
+    path: /var/log/sync
+    state: directory
+    mode: '0755'
+    owner: postgres
+    group: postgres
+
+- name: Create sync script
+  template:
+    src: sync.sh.j2
+    dest: /usr/local/bin/sync_geodata.sh
+    mode: '0755'
+    owner: postgres
+    group: postgres
+  notify: restart cron
+
+- name: Set up sync cron job
+  cron:
+    name: "Sync geodata"
+    job: "/usr/local/bin/sync_geodata.sh"
+    hour: "{{ sync_cron_hour | default('4') }}"
+    minute: "{{ sync_cron_minute | default('0') }}"
+    user: postgres
+    state: present
+
+- name: Run initial sync
+  command: /usr/local/bin/sync_geodata.sh
+  args:
+    creates: /var/log/sync/sync_data.log
+  become: yes
+  become_user: postgres
+  register: sync_result
+  async: 3600  # 1 hour timeout
+  poll: 0      # Don't wait for completion
+
+- name: Show sync status
+  debug:
+    var: sync_result 
